@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Space Dodger: Shop & Timers</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+        canvas { display: block; }
+        
+        #ui {
+            position: absolute; top: 15px; left: 15px;
+            color: white; font-size: 22px; pointer-events: none; text-shadow: 2px 2px #000;
+            display: none; z-index: 5; line-height: 1.2;
+        }
+
+        #pauseBtn {
+            position: absolute; top: 15px; right: 15px;
+            width: 50px; height: 50px; background: rgba(255,255,255,0.2);
+            border: 2px solid white; color: white; border-radius: 10px;
+            font-size: 24px; font-weight: bold; display: none; 
+            align-items: center; justify-content: center; z-index: 10;
+        }
+
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); color: white; display: flex;
+            flex-direction: column; align-items: center; justify-content: center;
+            z-index: 100; text-align: center;
+        }
+
+        .menu-box {
+            background: rgba(20, 20, 20, 0.95); padding: 30px 20px;
+            border-radius: 20px; border: 2px solid #00ebff; width: 85%; max-width: 320px;
+            max-height: 80vh; overflow-y: auto;
+        }
+      h1 { margin: 0 0 15px 0; font-size: 28px; color: #00ebff; text-transform: uppercase; letter-spacing: 2px; }
+        
+        button {
+            padding: 12px; font-size: 16px; cursor: pointer;
+            background: #00ebff; border: none; color: #000; 
+            border-radius: 8px; font-weight: bold; margin: 8px 0;
+            width: 100%; transition: 0.2s;
+        }
+
+        .secondary-btn { background: #ff4757; color: white; }
+        .menu-btn { background: #7bed9f; color: #000; }
+        .shop-btn { background: #ffd700; color: #000; }
+        .reset-btn { background: #576574; color: #fff; font-size: 12px; margin-top: 15px; }
+        
+        .status { font-size: 14px; margin-top: 5px; color: #00ebff; white-space: pre-line; text-align: left; }
+        #highScoreUI, #coinUI { font-size: 16px; color: #ffd700; opacity: 0.9; }
+
+        .shop-item {
+            background: rgba(255,255,255,0.1); padding: 10px; border-radius: 10px; margin-bottom: 10px;
+            display: flex; flex-direction: column; align-items: center;
+        }
+
+        #bossHealthContainer {
+            position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+            width: 200px; height: 10px; background: #333; border: 2px solid #fff;
+            display: none; border-radius: 5px; overflow: hidden;
+        }
+        #bossHealthBar { width: 100%; height: 100%; background: #ff4757; transition: 0.1s; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div id="currentScore">Score: 0</div>
+        <div id="coinUI">Coins: 0</div>
+        <div id="highScoreUI">Best: 0</div>
+        <div id="activeEffect" class="status"></div>
+    </div>
+    
+    <div id="bossHealthContainer"><div id="bossHealthBar"></div></div>
+    <div id="pauseBtn" onclick="togglePause()">II</div>
+
+    <div id="mainMenu" class="overlay">
+        <div class="menu-box">
+            <h1>SPACE<br>DODGER</h1>
+            <button onclick="showModeMenu()">START GAME</button>
+            <button class="shop-btn" onclick="showShop()">UPGRADES (SHOP)</button>
+        </div>
+    </div>
+
+    <div id="modeMenu" class="overlay" style="display:none;">
+        <div class="menu-box">
+            <h1>CHOOSE MODE</h1>
+            <button onclick="startGame('boss')">BOSS RUSH</button>
+            <button class="menu-btn" onclick="startGame('endless')">ENDLESS MODE</button>
+            <button class="reset-btn" onclick="confirmReset()">RESET PROGRESS</button>
+            <button class="secondary-btn" onclick="showMainMenu()">BACK</button>
+        </div>
+    </div>
+
+    <div id="shopMenu" class="overlay" style="display:none;">
+        <div class="menu-box">
+            <h1>STATION SHOP</h1>
+            <p id="shopCoins" style="color:#ffd700; font-weight:bold;">Coins: 0</p>
+            <div class="shop-item">
+                <span>Power-up Duration</span>
+                <button onclick="buyUpgrade('duration')">Upgrade (Cost: 100)</button>
+                <small id="durationLevel">Level: 1</small>
+            </div>
+            <button class="secondary-btn" onclick="closeShop()">CLOSE</button>
+        </div>
+    </div>
+
+    <div id="pauseMenu" class="overlay" style="display:none;">
+        <div class="menu-box">
+            <h1>PAUSED</h1>
+            <button onclick="togglePause()">RESUME</button>
+            <button class="shop-btn" onclick="showShop()">SHOP</button>
+            <button class="secondary-btn" onclick="resetGame()">RESTART</button>
+            <button class="menu-btn" onclick="showMainMenu()">MAIN MENU</button>
+            <button class="reset-btn" onclick="confirmReset()">RESET PROGRESS</button>
+        </div>
+    </div>
+
+    <div id="msg" class="overlay" style="display:none;">
+        <div class="menu-box">
+            <h1 id="msgTitle">CRASHED</h1>
+            <p id="finalScore" style="font-size: 20px; margin-bottom: 5px;"></p>
+            <p id="bestScoreMsg" style="font-size: 16px; color: #ffd700; margin-bottom: 20px;"></p>
+            <button onclick="resetGame()">TRY AGAIN</button>
+            <button class="menu-btn" onclick="showMainMenu()">MAIN MENU</button>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const ui = document.getElementById('ui');
+        const currentScoreElement = document.getElementById('currentScore');
+        const coinUI = document.getElementById('coinUI');
+        const highScoreUI = document.getElementById('highScoreUI');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const mainMenu = document.getElementById('mainMenu');
+        const modeMenu = document.getElementById('modeMenu');
+        const shopMenu = document.getElementById('shopMenu');
+        const pauseMenu = document.getElementById('pauseMenu');
+        const msgElement = document.getElementById('msg');
+        const effectElement = document.getElementById('activeEffect');
+        const bossHealthCont = document.getElementById('bossHealthContainer');
+        const bossHealthBar = document.getElementById('bossHealthBar');
+
+        let score = 0, coins = parseInt(localStorage.getItem('sd_coins')) || 0, gameActive = false, isPaused = false, frame = 0, gameMode = 'endless';
+        let highScore = localStorage.getItem('spaceDodgerHighScore') || 0;
+        let upgradeLevel = parseInt(localStorage.getItem('sd_dur_lvl')) || 1;
+
+        let player = { x: 0, y: 0, w: 45, h: 55, baseW: 45, baseH: 55 };
+        let obstacles = [], powerups = [], stars = [], particles = [], explosions = [];
+        let hasShield = false, slowMoTimer = 0, shrinkTimer = 0, laserTimer = 0, wingmenTimer = 0;
+        let activeBoss = null;
+
+        highScoreUI.innerText = `Best: ${highScore}`;
+        coinUI.innerText = `Coins: ${coins}`;
+
+        function initStars() {
+            stars = [];
+            for(let i=0; i<50; i++) stars.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, s: Math.random()*2 });
+        }
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            player.x = canvas.width / 2 - player.w / 2;
+            player.y = canvas.height - 120;
+            initStars();
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let touchX = null;
+        window.addEventListener('touchstart', (e) => { if(!isPaused && gameActive) touchX = e.touches[0].clientX; });
+        window.addEventListener('touchmove', (e) => { if(!isPaused && gameActive) { touchX = e.touches[0].clientX; e.preventDefault(); } }, { passive: false });
+
+        function showModeMenu() { mainMenu.style.display = 'none'; modeMenu.style.display = 'flex'; }
+        function showShop() { 
+            mainMenu.style.display = 'none'; 
+            pauseMenu.style.display = 'none'; 
+            shopMenu.style.display = 'flex'; 
+            updateShopUI(); 
+        }
+        function closeShop() {
+            shopMenu.style.display = 'none';
+            if (gameActive) pauseMenu.style.display = 'flex';
+            else mainMenu.style.display = 'flex';
+        }
+      function updateShopUI() {
+            document.getElementById('shopCoins').innerText = `Coins: ${coins}`;
+            document.getElementById('durationLevel').innerText = `Level: ${upgradeLevel} (+${(upgradeLevel-1)*10}% duration)`;
+        }
+
+        function buyUpgrade(type) {
+            let cost = upgradeLevel * 100;
+            if (coins >= cost) {
+                coins -= cost;
+                upgradeLevel++;
+                localStorage.setItem('sd_coins', coins);
+                localStorage.setItem('sd_dur_lvl', upgradeLevel);
+                coinUI.innerText = `Coins: ${coins}`;
+                updateShopUI();
+                alert("Upgrade successful!");
+            } else {
+                alert("Not enough coins!");
+            }
+        }
+
+        function startGame(mode) {
+            gameMode = mode;
+            modeMenu.style.display = 'none';
+            ui.style.display = 'block';
+            pauseBtn.style.display = 'flex';
+            resetGame();
+        }
+
+        function showMainMenu() {
+            gameActive = false; isPaused = false;
+            mainMenu.style.display = 'flex'; modeMenu.style.display = 'none';
+            pauseMenu.style.display = 'none'; msgElement.style.display = 'none';
+            ui.style.display = 'none'; pauseBtn.style.display = 'none'; bossHealthCont.style.display = 'none';
+        }
+
+        function togglePause() {
+            if (!gameActive) return;
+            isPaused = !isPaused;
+            pauseMenu.style.display = isPaused ? 'flex' : 'none';
+            if (!isPaused) draw();
+        }
+
+        function confirmReset() {
+            if (confirm("Are you sure you want to start your space journey over again?")) {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+
+        function spawnBoss(type) {
+            let hp = type === 1 ? 50 : (type === 2 ? 100 : 250);
+            let size = type === 1 ? 80 : (type === 2 ? 120 : 200);
+            activeBoss = { type, x: canvas.width/2-size/2, y: -size, w: size, h: size*0.8, hp, maxHp: hp, dir: 1, speed: type===1?3:2 };
+            bossHealthCont.style.display = 'block';
+            updateBossUI();
+        }
+
+        function updateBossUI() {
+            if (activeBoss) bossHealthBar.style.width = (activeBoss.hp / activeBoss.maxHp * 100) + "%";
+        }
+
+        function createFireParticle(x, y, size, isExplosion = false) {
+            const colors = isExplosion ? ['#ff4500', '#ffae00', '#ffffff'] : ['#ff4500', '#ff8c00', '#ffd700', '#ff0000'];
+            particles.push({
+                x: x + (Math.random() - 0.5) * (isExplosion ? size * 0.5 : size),
+                y: y + (isExplosion ? (Math.random() - 0.5) * size * 0.5 : 0),
+                vx: (Math.random() - 0.5) * (isExplosion ? 10 : 2),
+                vy: isExplosion ? (Math.random() - 0.5) * 10 : -(Math.random() * 2 + 1),
+                life: 1.0, decay: isExplosion ? 0.015 : (0.02 + Math.random() * 0.03),
+                size: Math.random() * (isExplosion ? 15 : 8) + 2, color: colors[Math.floor(Math.random() * colors.length)]
+            });
+        }
+
+        function triggerBomb(x, y) {
+            explosions.push({ x: x, y: y, r: 0, maxR: 250, alpha: 1.0 });
+            for(let i=0; i<40; i++) createFireParticle(x, y, 50, true);
+        }
+
+        function addCoins(amt) {
+            coins += amt;
+            localStorage.setItem('sd_coins', coins);
+            coinUI.innerText = `Coins: ${coins}`;
+        }
+
+        function update() {
+            if (!gameActive || isPaused) return;
+
+            stars.forEach(s => { s.y += (slowMoTimer > 0 ? 0.5 : 2); if(s.y > canvas.height) s.y = 0; });
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i]; p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                let ex = explosions[i]; ex.r += 12; ex.alpha -= 0.02;
+                if (ex.alpha <= 0) explosions.splice(i, 1);
+            }
+
+            if (touchX !== null) player.x += ((touchX - player.w/2) - player.x) * 0.2;
+
+            if (slowMoTimer > 0) slowMoTimer--;
+            if (laserTimer > 0) laserTimer--;
+            if (wingmenTimer > 0) wingmenTimer--;
+            if (shrinkTimer > 0) {
+                shrinkTimer--; player.w = player.baseW * 0.6; player.h = player.baseH * 0.6;
+            } else { player.w = player.baseW; player.h = player.baseH; }
+
+            let statusTxt = hasShield ? "[SHIELD]\n" : "";
+            if(slowMoTimer > 0) statusTxt += `[SLOW]: ${(slowMoTimer/60).toFixed(1)}s\n`;
+            if(shrinkTimer > 0) statusTxt += `[SMALL]: ${(shrinkTimer/60).toFixed(1)}s\n`;
+            if(laserTimer > 0) statusTxt += `[LASER]: ${(laserTimer/60).toFixed(1)}s\n`;
+            if(wingmenTimer > 0) statusTxt += `[WINGMEN]: ${(wingmenTimer/60).toFixed(1)}s\n`;
+            effectElement.innerText = statusTxt;
+
+            if (gameMode === 'boss' && !activeBoss) {
+                if (score >= 1000) spawnBoss(3); else if (score >= 500) spawnBoss(2); else if (score >= 250) spawnBoss(1);
+            }
+
+            if (frame % 25 === 0 && (!activeBoss || activeBoss.type < 3)) {
+                let size = 25 + Math.random() * 35;
+                obstacles.push({ x: Math.random()*(canvas.width-30), y: -60, size, vertices: Array.from({length:8}, () => 0.7+Math.random()*0.4), rotation: 0, rotationSpeed: (Math.random()-0.5)*0.1, speed: (3+Math.random()*4)*(slowMoTimer>0?0.4:1) });
+            }
+
+            if (frame % 300 === 0) {
+                const types = ['shield', 'slowmo', 'shrink', 'laser', 'bomb', 'wingmen'];
+                powerups.push({ x: Math.random()*(canvas.width-20), y: -30, type: types[Math.floor(Math.random()*types.length)], size: 20 });
+            }
+
+            if (activeBoss) {
+                if (activeBoss.y < 80) activeBoss.y += 2;
+                activeBoss.x += activeBoss.speed * activeBoss.dir;
+                if (activeBoss.x <= 0 || activeBoss.x + activeBoss.w >= canvas.width) activeBoss.dir *= -1;
+                if (player.x < activeBoss.x + activeBoss.w && player.x + player.w > activeBoss.x && player.y < activeBoss.y + activeBoss.h && player.y + player.h > activeBoss.y) {
+                    if (hasShield) { hasShield = false; activeBoss.hp -= 10; updateBossUI(); } else gameOver();
+      }
+              let pC = player.x + player.w/2;
+                if (laserTimer > 0 && pC > activeBoss.x && pC < activeBoss.x + activeBoss.w) { activeBoss.hp -= 0.5; updateBossUI(); }
+                if (wingmenTimer > 0 && ((pC-40 > activeBoss.x && pC-40 < activeBoss.x + activeBoss.w) || (pC+40 > activeBoss.x && pC+40 < activeBoss.x+activeBoss.w))) { activeBoss.hp -= 0.5; updateBossUI(); }
+                if (activeBoss.hp <= 0) { triggerBomb(activeBoss.x+activeBoss.w/2, activeBoss.y+activeBoss.h/2); score += 50; addCoins(50); if (activeBoss.type === 3) gameWin(); activeBoss = null; bossHealthCont.style.display = 'none'; }
+            }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let o = obstacles[i]; o.y += o.speed; o.rotation += o.rotationSpeed;
+                if (frame % 2 === 0) createFireParticle(o.x + o.size/2, o.y + o.size/4, o.size);
+                let destroyed = false;
+                let pC = player.x + player.w/2;
+                if (laserTimer > 0 && o.x < pC+5 && o.x+o.size > pC-5 && o.y < player.y) { destroyed = true; addCoins(1); }
+                if (wingmenTimer > 0 && ((o.x < pC-35 && o.x+o.size > pC-45) || (o.x < pC+45 && o.x+o.size > pC+35)) && o.y < player.y) { destroyed = true; addCoins(1); }
+                explosions.forEach(ex => { if (Math.sqrt(Math.pow(o.x+o.size/2-ex.x,2)+Math.pow(o.y+o.size/2-ex.y,2)) < ex.r+o.size/2) { destroyed = true; addCoins(1); } });
+
+                if (destroyed) { obstacles.splice(i, 1); score++; currentScoreElement.innerText = `Score: ${score}`; continue; }
+                if (Math.sqrt(Math.pow(player.x+player.w/2-(o.x+o.size/2),2)+Math.pow(player.y+player.h/2-(o.y+o.size/2),2)) < (o.size/2+player.w/3)) {
+                    if (hasShield) { hasShield = false; obstacles.splice(i, 1); } else gameOver();
+                }
+                if (o.y > canvas.height + 100) { obstacles.splice(i, 1); score++; currentScoreElement.innerText = `Score: ${score}`; }
+            }
+
+            for (let i = powerups.length - 1; i >= 0; i--) {
+                let p = powerups[i]; p.y += 3;
+                if (player.x < p.x + p.size && player.x + player.w > p.x && player.y < p.y + p.size && player.y + player.h > p.y) {
+                    let baseDur = p.type === 'slowmo' ? 300 : (p.type === 'shrink' ? 400 : 900);
+                    let duration = Math.floor(baseDur * (1 + (upgradeLevel - 1) * 0.1));
+                    if (p.type === 'shield') hasShield = true;
+                    if (p.type === 'slowmo') slowMoTimer += duration;
+                    if (p.type === 'shrink') shrinkTimer += duration;
+                    if (p.type === 'laser') laserTimer += duration;
+                    if (p.type === 'wingmen') wingmenTimer += duration;
+                    if (p.type === 'bomb') triggerBomb(player.x + player.w/2, player.y + player.h/2);
+                    powerups.splice(i, 1);
+                } else if (p.y > canvas.height) powerups.splice(i, 1);
+            }
+            frame++;
+        }
+
+        function drawAsteroid(o) {
+            ctx.save(); ctx.translate(o.x+o.size/2, o.y+o.size/2); ctx.rotate(o.rotation); ctx.beginPath();
+            o.vertices.forEach((v, i) => { let a = (i/o.vertices.length)*Math.PI*2; let r = (o.size/2)*v; if(i===0) ctx.moveTo(Math.cos(a)*r, Math.sin(a)*r); else ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r); });
+            ctx.closePath(); ctx.fillStyle = '#444'; ctx.fill(); ctx.strokeStyle = '#666'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
+        }
+
+        function drawLaser(x, targetY) {
+            let g = ctx.createLinearGradient(x-10, 0, x+10, 0); g.addColorStop(0,'transparent'); g.addColorStop(0.5,'#a55eea'); g.addColorStop(1,'transparent');
+            ctx.fillStyle = g; ctx.globalAlpha = 0.6+Math.random()*0.4; ctx.fillRect(x-10, 0, 20, targetY); ctx.globalAlpha = 1.0; ctx.fillStyle = "white"; ctx.fillRect(x-2, 0, 4, targetY);
+        }
+
+        function drawShip(x, y, w, h, color) {
+            ctx.save(); ctx.translate(x+w/2, y+h/2); ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(0,-h/2); ctx.lineTo(w/2,h/4); ctx.lineTo(w/4,h/2); ctx.lineTo(-w/4,h/2); ctx.lineTo(-w/2,h/4); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(0,-h/8,w/6,h/4,0,0,Math.PI*2); ctx.fill(); ctx.strokeStyle = "white"; ctx.stroke(); ctx.restore();
+        }
+
+        function draw() {
+            if (isPaused || !gameActive) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "white"; stars.forEach(s => ctx.fillRect(s.x, s.y, s.s, s.s));
+            particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size*p.life, 0, Math.PI*2); ctx.fill(); });
+            ctx.globalAlpha = 1.0;
+            explosions.forEach(ex => { ctx.save(); ctx.globalAlpha = ex.alpha; let grad = ctx.createRadialGradient(ex.x, ex.y, ex.r*0.2, ex.x, ex.y, ex.r); grad.addColorStop(0, 'rgba(255, 255, 255, 0.8)'); grad.addColorStop(0.3, 'rgba(255, 200, 0, 0.5)'); grad.addColorStop(1, 'rgba(255, 0, 0, 0)'); ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.r, 0, Math.PI*2); ctx.fill(); ctx.restore(); });
+            powerups.forEach(p => { ctx.beginPath(); ctx.arc(p.x+10, p.y+10, 12, 0, Math.PI*2); const colors = {shield: '#00d2ff', slowmo: '#7bed9f', shrink: '#eccc68', laser: '#a55eea', bomb: '#ff4757', wingmen: '#ffffff'}; ctx.fillStyle = colors[p.type]; ctx.fill(); });
+            if (laserTimer > 0) drawLaser(player.x+player.w/2, player.y);
+            if (wingmenTimer > 0) { drawShip(player.x-50, player.y+10, 20, 30, "#7bed9f"); drawShip(player.x+player.w+30, player.y+10, 20, 30, "#7bed9f"); drawLaser(player.x-40, player.y); drawLaser(player.x+player.w+40, player.y); }
+            if (activeBoss) { const b = activeBoss; ctx.fillStyle = b.type===1?"#ff4757":b.type===2?"#ffa502":"#747d8c"; ctx.fillRect(b.x,b.y,b.w,b.h); ctx.strokeStyle="white"; ctx.strokeRect(b.x,b.y,b.w,b.h); ctx.fillStyle="#00ebff"; ctx.fillRect(b.x+b.w*0.2, b.y+b.h*0.3, b.w*0.1, b.h*0.2); ctx.fillRect(b.x+b.w*0.7, b.y+b.h*0.3, b.w*0.1, b.h*0.2); }
+            drawShip(player.x, player.y, player.w, player.h, "#4ec3e0");
+            if (hasShield) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(player.x+player.w/2, player.y+player.h/2, player.w*0.9, 0, Math.PI*2); ctx.stroke(); }
+            obstacles.forEach(o => drawAsteroid(o));
+            requestAnimationFrame(() => { update(); draw(); });
+        }
+
+        function gameOver() {
+            gameActive = false; bossHealthCont.style.display = 'none';
+            if (score > highScore) { highScore = score; localStorage.setItem('spaceDodgerHighScore', highScore); highScoreUI.innerText = `Best: ${highScore}`; }
+            document.getElementById('msgTitle').innerText = "CRASHED";
+            document.getElementById('finalScore').innerText = `Final Score: ${score}`;
+            document.getElementById('bestScoreMsg').innerText = `Best Score: ${highScore}`;
+            msgElement.style.display = 'flex';
+        }
+
+        function gameWin() {
+            gameActive = false; bossHealthCont.style.display = 'none';
+            document.getElementById('msgTitle').innerText = "VICTORY!";
+            document.getElementById('finalScore').innerText = `You defeated the Final Boss!`;
+            document.getElementById('bestScoreMsg').innerText = `Score: ${score}`;
+            msgElement.style.display = 'flex';
+        }
+
+        function resetGame() {
+            score = 0; frame = 0; obstacles = []; powerups = []; particles = []; explosions = [];
+            hasShield = false; slowMoTimer = 0; shrinkTimer = 0; laserTimer = 0; wingmenTimer = 0;
+            activeBoss = null; bossHealthCont.style.display = 'none';
+            gameActive = true; isPaused = false;
+            currentScoreElement.innerText = `Score: 0`;
+            msgElement.style.display = 'none'; pauseMenu.style.display = 'none';
+            resize(); draw();
+        }
+    </script>
+</body>
+</html>
