@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Space Dodger: Skins & Bosses</title>
+<style>
+body { margin: 0; background: #000; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+canvas { display: block; }
+
+#ui {
+    position: absolute; top: 15px; left: 15px;
+    color: white; font-size: 22px; pointer-events: none; text-shadow: 2px 2px #000;
+    display: none; z-index: 5; line-height: 1.2;
+}
+
+#pauseBtn {
+    position: absolute; top: 15px; right: 15px;
+    width: 50px; height: 50px; background: rgba(255,255,255,0.2);
+    border: 2px solid white; color: white; border-radius: 10px;
+    font-size: 24px; font-weight: bold; display: none;
+    align-items: center; justify-content: center; z-index: 10;
+}
+
+.overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.85); color: white; display: flex;
+    flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100; text-align: center;
+}
+
+.menu-box {
+    background: rgba(20, 20, 20, 0.95); padding: 30px 20px;
+    border-radius: 20px; border: 2px solid #00ebff; width: 85%; max-width: 350px;
+    max-height: 85vh; overflow-y: auto;
+}
+
+.menu-box::-webkit-scrollbar { width: 8px; }
+.menu-box::-webkit-scrollbar-track { background: #111; }
+.menu-box::-webkit-scrollbar-thumb { background: #00ebff; border-radius: 4px; }
+
+h1 { margin: 0 0 15px 0; font-size: 28px; color: #00ebff; text-transform: uppercase; letter-spacing: 2px; }
+
+button {
+    padding: 12px; font-size: 16px; cursor: pointer;
+    background: #00ebff; border: none; color: #000;
+    border-radius: 8px; font-weight: bold; margin: 8px 0;
+    width: 100%; transition: 0.2s;
+}
+
+.secondary-btn { background: #ff4757; color: white; }
+.menu-btn { background: #7bed9f; color: #000; }
+.shop-btn { background: #ffd700; color: #000; }
+.reset-btn { background: #576574; color: #fff; font-size: 12px; margin-top: 15px; }
+.tab-btn { width: 48%; display: inline-block; margin: 0 1%; font-size: 14px; }
+
+.status { font-size: 14px; margin-top: 5px; color: #00ebff; white-space: pre-line; text-align: left; }
+#highScoreUI, #coinUI { font-size: 16px; color: #ffd700; opacity: 0.9; }
+
+.shop-item {
+    background: rgba(255,255,255,0.05); padding: 10px; border-radius: 10px; margin-bottom: 10px;
+    display: flex; flex-direction: column; align-items: center; border: 1px solid #333;
+}
+.shop-item h3 { margin: 5px 0; color: #ffd700; font-size: 16px; }
+.shop-item p { margin: 2px 0 8px 0; font-size: 12px; color: #ccc; }
+
+#bossHealthContainer {
+    position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+    width: 200px; height: 10px; background: #333; border: 2px solid #fff;
+    display: none; border-radius: 5px; overflow: hidden;
+}
+#bossHealthBar { width: 100%; height: 100%; background: #ff4757; transition: 0.1s; }
+</style>
+</head>
+<body>
+
+<div id="ui">
+    <div id="currentScore">Score: 0</div>
+    <div id="coinUI">Coins: 0</div>
+    <div id="highScoreUI">Best: 0</div>
+    <div id="activeEffect" class="status"></div>
+</div>
+
+<div id="bossHealthContainer"><div id="bossHealthBar"></div></div>
+<div id="pauseBtn" onclick="togglePause()">II</div>
+
+<div id="mainMenu" class="overlay">
+    <div class="menu-box">
+        <h1>SPACE<br>DODGER</h1>
+        <button onclick="showModeMenu()">START GAME</button>
+        <button class="shop-btn" onclick="showShop()">UPGRADES & SKINS</button>
+    </div>
+</div>
+
+<div id="modeMenu" class="overlay" style="display:none;">
+    <div class="menu-box">
+        <h1>CHOOSE MODE</h1>
+        <button onclick="startGame('boss')">BOSS RUSH</button>
+        <button class="menu-btn" onclick="startGame('endless')">ENDLESS MODE</button>
+        <button class="reset-btn" onclick="confirmReset()">RESET PROGRESS</button>
+        <button class="secondary-btn" onclick="showMainMenu()">BACK</button>
+    </div>
+</div>
+
+<div id="shopMenu" class="overlay" style="display:none;">
+    <div class="menu-box">
+        <h1>STATION SHOP</h1>
+        <p id="shopCoins" style="color:#ffd700; font-weight:bold; margin-bottom:15px;">Coins: 0</p>
+        
+        <div style="margin-bottom: 10px;">
+            <button class="tab-btn" onclick="switchShopTab('upgrades')" id="btnUpgrades">UPGRADES</button>
+            <button class="tab-btn" onclick="switchShopTab('skins')" id="btnSkins" style="background:#555; color:#fff">SKINS</button>
+        </div>
+
+        <div id="shopList">
+            </div>
+        <button class="secondary-btn" onclick="closeShop()">CLOSE</button>
+    </div>
+</div>
+
+<div id="pauseMenu" class="overlay" style="display:none;">
+    <div class="menu-box">
+        <h1>PAUSED</h1>
+        <button onclick="togglePause()">RESUME</button>
+        <button class="shop-btn" onclick="showShop()">SHOP</button>
+        <button class="secondary-btn" onclick="resetGame()">RESTART</button>
+        <button class="menu-btn" onclick="showMainMenu()">MAIN MENU</button>
+        <button class="reset-btn" onclick="confirmReset()">RESET PROGRESS</button>
+    </div>
+</div>
+
+<div id="msg" class="overlay" style="display:none;">
+    <div class="menu-box">
+        <h1 id="msgTitle">CRASHED</h1>
+        <p id="finalScore" style="font-size: 20px; margin-bottom: 5px;"></p>
+        <p id="bestScoreMsg" style="font-size: 16px; color: #ffd700; margin-bottom: 20px;"></p>
+        <button onclick="resetGame()">TRY AGAIN</button>
+        <button class="menu-btn" onclick="showMainMenu()">MAIN MENU</button>
+    </div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const ui = document.getElementById('ui');
+const currentScoreElement = document.getElementById('currentScore');
+const coinUI = document.getElementById('coinUI');
+const highScoreUI = document.getElementById('highScoreUI');
+const pauseBtn = document.getElementById('pauseBtn');
+const mainMenu = document.getElementById('mainMenu');
+const modeMenu = document.getElementById('modeMenu');
+const shopMenu = document.getElementById('shopMenu');
+const pauseMenu = document.getElementById('pauseMenu');
+const msgElement = document.getElementById('msg');
+const effectElement = document.getElementById('activeEffect');
+const bossHealthCont = document.getElementById('bossHealthContainer');
+const bossHealthBar = document.getElementById('bossHealthBar');
+
+// Game State
+let score = 0, coins = parseInt(localStorage.getItem('sd_coins')) || 0;
+let gameActive = false, isPaused = false, frame = 0, gameMode = 'endless';
+let highScore = localStorage.getItem('spaceDodgerHighScore') || 0;
+
+// Upgrades
+const defaultUpgrades = { shield: 1, slowmo: 1, shrink: 1, laser: 1, wingmen: 1, bomb: 1 };
+let upgrades = JSON.parse(localStorage.getItem('sd_upgrades')) || defaultUpgrades;
+
+// Skins Logic
+const availableSkins = [
+    { id: 'default', name: 'Standard Issue', cost: 0, color: '#4ec3e0' },
+    { id: 'crimson', name: 'Crimson Raider', cost: 1000, color: '#ff4757' },
+    { id: 'gold', name: 'Golden Ace', cost: 2500, color: '#ffd700' },
+    { id: 'shadow', name: 'Stealth Ops', cost: 5000, color: '#2f3542' },
+    { id: 'neon', name: 'Neon Glider', cost: 8000, color: '#00ebff' }
+];
+let ownedSkins = JSON.parse(localStorage.getItem('sd_owned_skins')) || ['default'];
+let equippedSkin = localStorage.getItem('sd_equipped_skin') || 'default';
+
+let currentShopTab = 'upgrades';
+
+let player = { x: 0, y: 0, w: 45, h: 55, baseW: 45, baseH: 55 };
+let obstacles = [], powerups = [], stars = [], particles = [], explosions = [];
+
+// Powerup Variables
+let shieldCount = 0;
+let slowMoTimer = 0, shrinkTimer = 0, laserTimer = 0, wingmenTimer = 0;
+let activeBoss = null;
+
+// Boss State Tracking
+let boss1Defeated = false;
+let boss2Defeated = false;
+
+highScoreUI.innerText = `Best: ${highScore}`;
+coinUI.innerText = `Coins: ${coins}`;
+
+function initStars() {
+    stars = [];
+    for(let i=0; i<50; i++) stars.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, s: Math.random()*2 });
+}
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    player.x = canvas.width / 2 - player.w / 2;
+    player.y = canvas.height - 120;
+    initStars();
+}
+window.addEventListener('resize', resize);
+resize();
+
+let touchX = null;
+window.addEventListener('touchstart', (e) => { if(!isPaused && gameActive) touchX = e.touches[0].clientX; });
+window.addEventListener('touchmove', (e) => { if(!isPaused && gameActive) { touchX = e.touches[0].clientX; e.preventDefault(); } }, { passive: false });
+
+function showModeMenu() { mainMenu.style.display = 'none'; modeMenu.style.display = 'flex'; }
+function showShop() {
+    mainMenu.style.display = 'none';
+    pauseMenu.style.display = 'none';
+    shopMenu.style.display = 'flex';
+    updateShopUI();
+}
+function closeShop() {
+    shopMenu.style.display = 'none';
+    if (gameActive) pauseMenu.style.display = 'flex';
+    else mainMenu.style.display = 'flex';
+}
+
+function switchShopTab(tab) {
+    currentShopTab = tab;
+    // Update Button Styles
+    document.getElementById('btnUpgrades').style.background = tab === 'upgrades' ? '#00ebff' : '#555';
+    document.getElementById('btnUpgrades').style.color = tab === 'upgrades' ? '#000' : '#fff';
+    document.getElementById('btnSkins').style.background = tab === 'skins' ? '#00ebff' : '#555';
+    document.getElementById('btnSkins').style.color = tab === 'skins' ? '#000' : '#fff';
+    updateShopUI();
+}
+
+function updateShopUI() {
+    document.getElementById('shopCoins').innerText = `Coins: ${coins}`;
+    const container = document.getElementById('shopList');
+    container.innerHTML = ''; 
+
+    if (currentShopTab === 'upgrades') {
+        const items = [
+            { key: 'shield', name: 'Shield Capacity', desc: 'Max Shields' },
+            { key: 'slowmo', name: 'Slow Motion', desc: 'Duration' },
+            { key: 'shrink', name: 'Shrink Potion', desc: 'Effect & Duration' },
+            { key: 'laser', name: 'Laser Beam', desc: 'Duration' },
+            { key: 'wingmen', name: 'Wingmen Support', desc: 'Duration' },
+            { key: 'bomb', name: 'TNT Explosive', desc: 'Blast Radius' }
+        ];
+
+        items.forEach(item => {
+            let lvl = upgrades[item.key] || 1;
+            let cost = lvl * 100;
+            let isMax = lvl >= 5;
+            
+            let infoText = "";
+            if (item.key === 'shield') infoText = `Capacity: ${lvl}`;
+            else if (item.key === 'bomb') infoText = `Radius: ${(200 + lvl*50)}px`;
+            else if (item.key === 'shrink') {
+                 let sizeScale = 0.6 - ((lvl-1) * 0.05);
+                 let dur = (400 + (lvl-1)*225)/60;
+                 infoText = `Size: ${(sizeScale*100).toFixed(0)}% | Time: ${dur.toFixed(1)}s`;
+            } else {
+                let secs = (300 + (lvl-1)*225) / 60;
+                infoText = `Duration: ${secs.toFixed(1)}s`;
+            }
+
+            let btnHTML = isMax 
+                ? `<button style="background:#555; color:#aaa; cursor:default;" disabled>MAX LEVEL</button>`
+                : `<button onclick="buyUpgrade('${item.key}')">Upgrade (Cost: ${cost})</button>`;
+
+            let div = document.createElement('div');
+            div.className = 'shop-item';
+            div.innerHTML = `<h3>${item.name} (Lvl ${lvl})</h3><p>${infoText}</p>${btnHTML}`;
+            container.appendChild(div);
+        });
+    } else {
+        // Skins Tab
+        availableSkins.forEach(skin => {
+            let isOwned = ownedSkins.includes(skin.id);
+            let isEquipped = equippedSkin === skin.id;
+            
+            let btnHTML = "";
+            if (isEquipped) {
+                btnHTML = `<button style="background:#7bed9f; cursor:default;" disabled>EQUIPPED</button>`;
+            } else if (isOwned) {
+                btnHTML = `<button onclick="equipSkin('${skin.id}')">EQUIP</button>`;
+            } else {
+                btnHTML = `<button class="shop-btn" onclick="buySkin('${skin.id}')">BUY (${skin.cost})</button>`;
+            }
+
+            let div = document.createElement('div');
+            div.className = 'shop-item';
+            div.innerHTML = `
+                <h3 style="color:${skin.color}">${skin.name}</h3>
+                <p>Visual Upgrade</p>
+                ${btnHTML}
+            `;
+            container.appendChild(div);
+        });
+    }
+}
+
+function buyUpgrade(type) {
+    let lvl = upgrades[type] || 1;
+    if (lvl >= 5) return;
+    let cost = lvl * 100;
+    if (coins >= cost) {
+        coins -= cost;
+        upgrades[type] = lvl + 1;
+        saveData();
+        updateShopUI();
+    } else alert("Not enough coins!");
+}
+
+function buySkin(skinId) {
+    let skin = availableSkins.find(s => s.id === skinId);
+    if (coins >= skin.cost) {
+        coins -= skin.cost;
+        ownedSkins.push(skinId);
+        saveData();
+        updateShopUI();
+    } else alert("Not enough coins!");
+}
+
+function equipSkin(skinId) {
+    equippedSkin = skinId;
+    saveData();
+    updateShopUI();
+}
+
+function saveData() {
+    localStorage.setItem('sd_coins', coins);
+    localStorage.setItem('sd_upgrades', JSON.stringify(upgrades));
+    localStorage.setItem('sd_owned_skins', JSON.stringify(ownedSkins));
+    localStorage.setItem('sd_equipped_skin', equippedSkin);
+    coinUI.innerText = `Coins: ${coins}`;
+}
+
+function startGame(mode) {
+    gameMode = mode;
+    modeMenu.style.display = 'none';
+    ui.style.display = 'block';
+    pauseBtn.style.display = 'flex';
+    resetGame();
+}
+
+function showMainMenu() {
+    gameActive = false; isPaused = false;
+    mainMenu.style.display = 'flex'; modeMenu.style.display = 'none';
+    pauseMenu.style.display = 'none'; msgElement.style.display = 'none';
+    ui.style.display = 'none'; pauseBtn.style.display = 'none'; bossHealthCont.style.display = 'none';
+}
+
+function togglePause() {
+    if (!gameActive) return;
+    isPaused = !isPaused;
+    pauseMenu.style.display = isPaused ? 'flex' : 'none';
+    if (!isPaused) draw();
+}
+
+function confirmReset() {
+    if (confirm("Are you sure you want to wipe all progress?")) {
+        localStorage.clear();
+        location.reload();
+    }
+}
+
+function spawnBoss(type) {
+    // Clear asteroids when boss spawns
+    obstacles = [];
+    
+    let hp = type === 1 ? 50 : (type === 2 ? 100 : 250);
+    let w = type === 1 ? 100 : (type === 2 ? 140 : 220);
+    let h = type === 1 ? 80 : (type === 2 ? 100 : 160);
+    
+    activeBoss = { type, x: canvas.width/2-w/2, y: -h, w, h, hp, maxHp: hp, dir: 1, speed: type===1?3:2 };
+    bossHealthCont.style.display = 'block';
+    updateBossUI();
+}
+
+function updateBossUI() {
+    if (activeBoss) bossHealthBar.style.width = (activeBoss.hp / activeBoss.maxHp * 100) + "%";
+}
+
+function createFireParticle(x, y, size, isExplosion = false) {
+    const colors = isExplosion ? ['#ff4500', '#ffae00', '#ffffff'] : ['#ff4500', '#ff8c00', '#ffd700', '#ff0000'];
+    particles.push({
+        x: x + (Math.random() - 0.5) * (isExplosion ? size * 0.5 : size),
+        y: y + (isExplosion ? (Math.random() - 0.5) * size * 0.5 : 0),
+        vx: (Math.random() - 0.5) * (isExplosion ? 10 : 2),
+        vy: isExplosion ? (Math.random() - 0.5) * 10 : -(Math.random() * 2 + 1),
+        life: 1.0, decay: isExplosion ? 0.015 : (0.02 + Math.random() * 0.03),
+        size: Math.random() * (isExplosion ? 15 : 8) + 2, color: colors[Math.floor(Math.random() * colors.length)]
+    });
+}
+
+function triggerBomb(x, y, maxR = 250) {
+    explosions.push({ x: x, y: y, r: 0, maxR: maxR, alpha: 1.0 });
+    for(let i=0; i<40; i++) createFireParticle(x, y, 50, true);
+}
+
+function addCoins(amt) {
+    coins += amt;
+    saveData();
+}
+
+function update() {
+    if (!gameActive || isPaused) return;
+
+    stars.forEach(s => { s.y += (slowMoTimer > 0 ? 0.5 : 2); if(s.y > canvas.height) s.y = 0; });
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i]; p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+    for (let i = explosions.length - 1; i >= 0; i--) {
+        let ex = explosions[i]; ex.r += 12; ex.alpha -= 0.02;
+        if (ex.alpha <= 0) explosions.splice(i, 1);
+    }
+
+    if (touchX !== null) player.x += ((touchX - player.w/2) - player.x) * 0.2;
+
+    if (slowMoTimer > 0) slowMoTimer--;
+    if (laserTimer > 0) laserTimer--;
+    if (wingmenTimer > 0) wingmenTimer--;
+    if (shrinkTimer > 0) {
+        shrinkTimer--; 
+        let lvl = upgrades['shrink'] || 1;
+        let scale = 0.6 - ((lvl-1) * 0.05);
+        player.w = player.baseW * scale; 
+        player.h = player.baseH * scale;
+    } else { player.w = player.baseW; player.h = player.baseH; }
+
+    let statusTxt = "";
+    if (shieldCount > 0) statusTxt += `[SHIELD]: x${shieldCount}\n`;
+    if (slowMoTimer > 0) statusTxt += `[SLOW]: ${(slowMoTimer/60).toFixed(1)}s\n`;
+    if (shrinkTimer > 0) statusTxt += `[SMALL]: ${(shrinkTimer/60).toFixed(1)}s\n`;
+    if (laserTimer > 0) statusTxt += `[LASER]: ${(laserTimer/60).toFixed(1)}s\n`;
+    if (wingmenTimer > 0) statusTxt += `[WINGMEN]: ${(wingmenTimer/60).toFixed(1)}s\n`;
+    effectElement.innerText = statusTxt;
+
+    // Boss Spawning Logic - FIXED: Only spawn once per milestone
+    if (!activeBoss) {
+        if (score >= 1000) spawnBoss(3); 
+        else if (score >= 500 && !boss2Defeated) spawnBoss(2); 
+        else if (score >= 250 && !boss1Defeated) spawnBoss(1);
+    }
+
+    // Spawn Obstacles ONLY if no boss is active
+    if (!activeBoss && frame % 25 === 0) {
+        let size = 25 + Math.random() * 35;
+        obstacles.push({ x: Math.random()*(canvas.width-30), y: -60, size, vertices: Array.from({length:8}, () => 0.7+Math.random()*0.4), rotation: 0, rotationSpeed: (Math.random()-0.5)*0.1, speed: (3+Math.random()*4)*(slowMoTimer>0?0.4:1) });
+    }
+
+    if (frame % 300 === 0) {
+        const types = ['shield', 'slowmo', 'shrink', 'laser', 'bomb', 'wingmen'];
+        powerups.push({ x: Math.random()*(canvas.width-20), y: -30, type: types[Math.floor(Math.random()*types.length)], size: 30 }); 
+    }
+
+    if (activeBoss) {
+        if (activeBoss.y < 80) activeBoss.y += 2;
+        activeBoss.x += activeBoss.speed * activeBoss.dir;
+        if (activeBoss.x <= 0 || activeBoss.x + activeBoss.w >= canvas.width) activeBoss.dir *= -1;
+        
+        // Boss Collision with Player
+        if (player.x < activeBoss.x + activeBoss.w && player.x + player.w > activeBoss.x && player.y < activeBoss.y + activeBoss.h && player.y + player.h > activeBoss.y) {
+            if (shieldCount > 0) { shieldCount--; activeBoss.hp -= 10; updateBossUI(); } else gameOver();
+        }
+        
+        let pC = player.x + player.w/2;
+        if (laserTimer > 0 && pC > activeBoss.x && pC < activeBoss.x + activeBoss.w) { activeBoss.hp -= 0.5; updateBossUI(); }
+        if (wingmenTimer > 0 && ((pC-40 > activeBoss.x && pC-40 < activeBoss.x + activeBoss.w) || (pC+40 > activeBoss.x && pC+40 < activeBoss.x+activeBoss.w))) { activeBoss.hp -= 0.5; updateBossUI(); }
+        
+        if (activeBoss.hp <= 0) { 
+            triggerBomb(activeBoss.x+activeBoss.w/2, activeBoss.y+activeBoss.h/2); 
+            addCoins(100); 
+            
+            // Mark bosses as defeated to prevent respawn
+            if (activeBoss.type === 1) boss1Defeated = true;
+            if (activeBoss.type === 2) boss2Defeated = true;
+            
+            // End game on Boss 3 (1000 pts)
+            if (activeBoss.type === 3) {
+                gameWin();
+            }
+            
+            activeBoss = null; 
+            bossHealthCont.style.display = 'none'; 
+        }
+    }
+
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+        let o = obstacles[i]; o.y += o.speed; o.rotation += o.rotationSpeed;
+        if (frame % 2 === 0) createFireParticle(o.x + o.size/2, o.y + o.size/4, o.size);
+        let destroyed = false;
+        let pC = player.x + player.w/2;
+        if (laserTimer > 0 && o.x < pC+5 && o.x+o.size > pC-5 && o.y < player.y) { destroyed = true; addCoins(1); }
+        if (wingmenTimer > 0 && ((o.x < pC-35 && o.x+o.size > pC-45) || (o.x < pC+45 && o.x+o.size > pC+35)) && o.y < player.y) { destroyed = true; addCoins(1); }
+        explosions.forEach(ex => { if (Math.sqrt(Math.pow(o.x+o.size/2-ex.x,2)+Math.pow(o.y+o.size/2-ex.y,2)) < ex.r+o.size/2) { destroyed = true; addCoins(1); } });
+
+        if (destroyed) { obstacles.splice(i, 1); score++; currentScoreElement.innerText = `Score: ${score}`; continue; }
+        if (Math.sqrt(Math.pow(player.x+player.w/2-(o.x+o.size/2),2)+Math.pow(player.y+player.h/2-(o.y+o.size/2),2)) < (o.size/2+player.w/3)) {
+            if (shieldCount > 0) { 
+                shieldCount--; 
+                obstacles.splice(i, 1); 
+                triggerBomb(o.x+o.size/2, o.y+o.size/2, 100);
+            } else gameOver();
+        }
+        if (o.y > canvas.height + 100) { obstacles.splice(i, 1); score++; currentScoreElement.innerText = `Score: ${score}`; }
+    }
+
+    for (let i = powerups.length - 1; i >= 0; i--) {
+        let p = powerups[i]; p.y += 3;
+        if (player.x < p.x + p.size && player.x + player.w > p.x && player.y < p.y + p.size && player.y + player.h > p.y) {
+            
+            let lvl = upgrades[p.type] || 1; 
+            let duration = 300 + (lvl - 1) * 225; 
+
+            if (p.type === 'shield') {
+                if (shieldCount < lvl) shieldCount++;
+            }
+            if (p.type === 'slowmo') slowMoTimer += duration;
+            if (p.type === 'shrink') shrinkTimer += duration;
+            if (p.type === 'laser') laserTimer += duration;
+            if (p.type === 'wingmen') wingmenTimer += duration;
+            if (p.type === 'bomb') {
+                let r = 200 + (lvl * 50);
+                triggerBomb(player.x + player.w/2, player.y + player.h/2, r);
+            }
+            
+            powerups.splice(i, 1);
+        } else if (p.y > canvas.height) powerups.splice(i, 1);
+    }
+    frame++;
+}
+
+function drawAsteroid(o) {
+    ctx.save(); ctx.translate(o.x+o.size/2, o.y+o.size/2); ctx.rotate(o.rotation); ctx.beginPath();
+    o.vertices.forEach((v, i) => { let a = (i/o.vertices.length)*Math.PI*2; let r = (o.size/2)*v; if(i===0) ctx.moveTo(Math.cos(a)*r, Math.sin(a)*r); else ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r); });
+    ctx.closePath(); ctx.fillStyle = '#444'; ctx.fill(); ctx.strokeStyle = '#666'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
+}
+
+function drawLaser(x, targetY) {
+    let g = ctx.createLinearGradient(x-10, 0, x+10, 0); g.addColorStop(0,'transparent'); g.addColorStop(0.5,'#a55eea'); g.addColorStop(1,'transparent');
+    ctx.fillStyle = g; ctx.globalAlpha = 0.6+Math.random()*0.4; ctx.fillRect(x-10, 0, 20, targetY); ctx.globalAlpha = 1.0; ctx.fillStyle = "white"; ctx.fillRect(x-2, 0, 4, targetY);
+}
+
+function drawShip(x, y, w, h, color) {
+    // Get skin color or default
+    let skin = availableSkins.find(s => s.id === equippedSkin);
+    let shipColor = skin ? skin.color : color;
+
+    ctx.save(); ctx.translate(x+w/2, y+h/2); 
+    
+    // Custom Skin Shapes
+    if (equippedSkin === 'crimson') {
+        // Sharp aggressive wings
+        ctx.fillStyle = shipColor; ctx.beginPath(); ctx.moveTo(0,-h/2); ctx.lineTo(w/2,h/2); ctx.lineTo(0,h/3); ctx.lineTo(-w/2,h/2); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#222"; ctx.fillRect(-w/6, -h/6, w/3, h/3);
+    } else if (equippedSkin === 'shadow') {
+        // Stealth Triangle
+        ctx.fillStyle = "#2f3542"; ctx.beginPath(); ctx.moveTo(0,-h/2); ctx.lineTo(w/2, h/2); ctx.lineTo(-w/2, h/2); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = "#2ed573"; ctx.lineWidth = 2; ctx.stroke();
+    } else if (equippedSkin === 'neon') {
+        // Hollow neon look
+        ctx.strokeStyle = shipColor; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0,-h/2); ctx.lineTo(w/2,h/4); ctx.lineTo(-w/2,h/4); ctx.closePath(); ctx.stroke();
+        ctx.fillStyle = "#000"; ctx.fill();
+    } else {
+        // Default / Gold
+        ctx.fillStyle = shipColor; ctx.beginPath(); ctx.moveTo(0,-h/2); ctx.lineTo(w/2,h/4); ctx.lineTo(w/4,h/2); ctx.lineTo(-w/4,h/2); ctx.lineTo(-w/2,h/4); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(0,-h/8,w/6,h/4,0,0,Math.PI*2); ctx.fill(); ctx.strokeStyle = "white"; ctx.stroke();
+    }
+    
+    ctx.restore();
+}
+
+function drawBossShip(b) {
+    ctx.save(); ctx.translate(b.x + b.w/2, b.y + b.h/2);
+    
+    if (b.type === 1) { // 250pts - The Scout
+        ctx.fillStyle = "#ff4757"; 
+        ctx.beginPath(); ctx.moveTo(0, b.h/2); ctx.lineTo(b.w/2, -b.h/2); ctx.lineTo(-b.w/2, -b.h/2); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = "white"; ctx.lineWidth = 3; ctx.stroke();
+        // Eyes
+        ctx.fillStyle = "#00ebff"; ctx.fillRect(-10, -20, 20, 10);
+    } 
+    else if (b.type === 2) { // 500pts - The Destroyer
+        ctx.fillStyle = "#ffa502";
+        ctx.fillRect(-b.w/2, -b.h/4, b.w, b.h/2);
+        ctx.fillRect(-b.w/4, -b.h/2, b.w/2, b.h);
+        ctx.strokeStyle = "white"; ctx.strokeRect(-b.w/2, -b.h/4, b.w, b.h/2);
+        // Cannons
+        ctx.fillStyle = "#555"; ctx.beginPath(); ctx.arc(-b.w/3, b.h/4, 15, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(b.w/3, b.h/4, 15, 0, Math.PI*2); ctx.fill();
+    } 
+    else { // 1000pts - Mothership
+        ctx.fillStyle = "#747d8c";
+        ctx.beginPath(); ctx.ellipse(0, 0, b.w/2, b.h/2, 0, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = "#00ebff"; ctx.lineWidth = 4; ctx.stroke();
+        // Core
+        ctx.fillStyle = "#ff0000"; ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI*2); ctx.fill();
+    }
+    
+    ctx.restore();
+}
+
+function drawPowerup(p) {
+    let cx = p.x + p.size/2;
+    let cy = p.y + p.size/2;
+    let s = p.size;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    if (p.type === 'shield') {
+        ctx.beginPath(); ctx.arc(0, 0, s/2, 0, Math.PI*2);
+        ctx.fillStyle = "rgba(0, 210, 255, 0.4)"; ctx.fill();
+        ctx.strokeStyle = "#00d2ff"; ctx.lineWidth = 2; ctx.stroke();
+        ctx.beginPath(); ctx.arc(-s*0.15, -s*0.15, s*0.1, 0, Math.PI*2);
+        ctx.fillStyle = "white"; ctx.fill();
+    } 
+    else if (p.type === 'laser') {
+        ctx.fillStyle = "#a55eea"; ctx.fillRect(-5, -s/2, 10, s);
+        ctx.fillStyle = "white"; ctx.fillRect(-2, -s/2, 4, s);
+        ctx.strokeStyle = "#a55eea"; ctx.lineWidth=2; ctx.strokeRect(-5, -s/2, 10, s);
+    }
+    else if (p.type === 'wingmen') {
+        ctx.save(); ctx.scale(0.6, 0.6);
+        ctx.fillStyle = "#7bed9f"; ctx.beginPath(); ctx.moveTo(0,-20); ctx.lineTo(15,10); ctx.lineTo(8,20); ctx.lineTo(-8,20); ctx.lineTo(-15,10); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = "white"; ctx.stroke(); ctx.restore();
+    }
+    else if (p.type === 'slowmo') {
+        ctx.beginPath(); ctx.arc(0, 0, s/2, 0, Math.PI*2);
+        ctx.fillStyle = "#fff"; ctx.fill();
+        ctx.strokeStyle = "#ffd700"; ctx.lineWidth = 3; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0, -s/3); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(s/4, 0); ctx.stroke();
+        ctx.fillStyle="#ffd700"; ctx.fillRect(-3, -s/2-3, 6, 4);
+    }
+    else if (p.type === 'shrink') {
+        ctx.fillStyle = "#eccc68"; ctx.beginPath(); ctx.arc(0, 5, 8, 0, Math.PI*2); ctx.fill();
+        ctx.fillRect(-3, -12, 6, 8); ctx.fillStyle = "#888"; ctx.fillRect(-4, -14, 8, 3);
+        ctx.strokeStyle = "#c0392b"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, -2); ctx.lineTo(0, 8); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-3, 5); ctx.lineTo(0, 8); ctx.lineTo(3, 5); ctx.stroke();
+    }
+    else if (p.type === 'bomb') {
+        ctx.fillStyle = "#ff4757"; ctx.fillRect(-6, -10, 12, 20);
+        ctx.fillStyle = "#000"; ctx.fillRect(-6, -6, 12, 2); ctx.fillRect(-6, 4, 12, 2);
+        ctx.beginPath(); ctx.moveTo(0, -10); ctx.quadraticCurveTo(5, -15, 8, -12);
+        ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = "orange"; ctx.fillRect(7, -13, 2, 2);
+    }
+    ctx.restore();
+}
+
+function draw() {
+    if (isPaused || !gameActive) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "white"; stars.forEach(s => ctx.fillRect(s.x, s.y, s.s, s.s));
+    particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size*p.life, 0, Math.PI*2); ctx.fill(); });
+    ctx.globalAlpha = 1.0;
+    explosions.forEach(ex => { ctx.save(); ctx.globalAlpha = ex.alpha; let grad = ctx.createRadialGradient(ex.x, ex.y, ex.r*0.2, ex.x, ex.y, ex.r); grad.addColorStop(0, 'rgba(255, 255, 255, 0.8)'); grad.addColorStop(0.3, 'rgba(255, 200, 0, 0.5)'); grad.addColorStop(1, 'rgba(255, 0, 0, 0)'); ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.r, 0, Math.PI*2); ctx.fill(); ctx.restore(); });
+    
+    powerups.forEach(p => { drawPowerup(p); });
+
+    if (laserTimer > 0) drawLaser(player.x+player.w/2, player.y);
+    if (wingmenTimer > 0) { drawShip(player.x-50, player.y+10, 20, 30, "#7bed9f"); drawShip(player.x+player.w+30, player.y+10, 20, 30, "#7bed9f"); drawLaser(player.x-40, player.y); drawLaser(player.x+player.w+40, player.y); }
+    
+    if (activeBoss) drawBossShip(activeBoss);
+    
+    drawShip(player.x, player.y, player.w, player.h, "#4ec3e0");
+    
+    if (shieldCount > 0) { 
+        ctx.strokeStyle = '#00d2ff'; ctx.lineWidth = 2 + (shieldCount); 
+        ctx.beginPath(); ctx.arc(player.x+player.w/2, player.y+player.h/2, player.w*0.9, 0, Math.PI*2); ctx.stroke(); 
+        if (shieldCount > 1) { ctx.beginPath(); ctx.arc(player.x+player.w/2, player.y+player.h/2, player.w*1.1, 0, Math.PI*2); ctx.stroke(); }
+    }
+    
+    obstacles.forEach(o => drawAsteroid(o));
+    requestAnimationFrame(() => { update(); draw(); });
+}
+
+function gameOver() {
+    gameActive = false; bossHealthCont.style.display = 'none';
+    if (score > highScore) { highScore = score; localStorage.setItem('spaceDodgerHighScore', highScore); highScoreUI.innerText = `Best: ${highScore}`; }
+    document.getElementById('msgTitle').innerText = "CRASHED";
+    document.getElementById('finalScore').innerText = `Final Score: ${score}`;
+    document.getElementById('bestScoreMsg').innerText = `Best Score: ${highScore}`;
+    msgElement.style.display = 'flex';
+}
+
+function gameWin() {
+    gameActive = false; bossHealthCont.style.display = 'none';
+    document.getElementById('msgTitle').innerText = "VICTORY!";
+    document.getElementById('finalScore').innerText = `You defeated the Alien Fleet!`;
+    document.getElementById('bestScoreMsg').innerText = `Score: ${score}`;
+    msgElement.style.display = 'flex';
+}
+
+function resetGame() {
+    score = 0; frame = 0; obstacles = []; powerups = []; particles = []; explosions = [];
+    shieldCount = 0; slowMoTimer = 0; shrinkTimer = 0; laserTimer = 0; wingmenTimer = 0;
+    activeBoss = null; bossHealthCont.style.display = 'none';
+    boss1Defeated = false; boss2Defeated = false; // Reset Boss Tracking
+    gameActive = true; isPaused = false;
+    currentScoreElement.innerText = `Score: 0`;
+    msgElement.style.display = 'none'; pauseMenu.style.display = 'none';
+    resize(); draw();
+}
+</script>
+</body>
+</html>
