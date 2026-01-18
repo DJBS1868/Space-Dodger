@@ -69,6 +69,15 @@ button {
     display: none; border-radius: 5px; overflow: hidden;
 }
 #bossHealthBar { width: 100%; height: 100%; background: #ff4757; transition: 0.1s; }
+
+/* NEW POPUP STYLE */
+#notification {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(20, 20, 20, 0.95); color: #ff4757; padding: 20px 30px;
+    border: 2px solid #ff4757; border-radius: 15px; font-size: 20px;
+    font-weight: bold; z-index: 200; display: none; text-align: center;
+    box-shadow: 0 0 20px rgba(255, 71, 87, 0.3);
+}
 </style>
 </head>
 <body>
@@ -82,6 +91,8 @@ button {
 
 <div id="bossHealthContainer"><div id="bossHealthBar"></div></div>
 <div id="pauseBtn" onclick="togglePause()">II</div>
+
+<div id="notification">NOT ENOUGH COINS!</div>
 
 <div id="mainMenu" class="overlay">
     <div class="menu-box">
@@ -105,7 +116,7 @@ button {
     <div class="menu-box">
         <h1>STATION SHOP</h1>
         <p id="shopCoins" style="color:#ffd700; font-weight:bold; margin-bottom:15px;">Coins: 0</p>
-        
+
         <div style="margin-bottom: 10px;">
             <button class="tab-btn" onclick="switchShopTab('upgrades')" id="btnUpgrades">UPGRADES</button>
             <button class="tab-btn" onclick="switchShopTab('skins')" id="btnSkins" style="background:#555; color:#fff">SKINS</button>
@@ -141,6 +152,63 @@ button {
 <canvas id="gameCanvas"></canvas>
 
 <script>
+// --- SOUND SYSTEM ---
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+const soundCtx = new AudioContext();
+
+function playSound(type) {
+    if (soundCtx.state === 'suspended') soundCtx.resume();
+    
+    const osc = soundCtx.createOscillator();
+    const gainNode = soundCtx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(soundCtx.destination);
+    
+    const now = soundCtx.currentTime;
+
+    if (type === 'ui') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, now);
+        osc.frequency.exponentialRampToValueAtTime(300, now + 0.1);
+        gainNode.gain.setValueAtTime(0.05, now);
+        gainNode.gain.linearRampToValueAtTime(0, now + 0.1);
+        osc.start(now); osc.stop(now + 0.1);
+    } 
+    else if (type === 'explosion') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(100, now);
+        osc.frequency.exponentialRampToValueAtTime(10, now + 0.4);
+        gainNode.gain.setValueAtTime(0.1, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+        osc.start(now); osc.stop(now + 0.4);
+    } 
+    else if (type === 'powerup') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.linearRampToValueAtTime(800, now + 0.2);
+        gainNode.gain.setValueAtTime(0.03, now);
+        gainNode.gain.linearRampToValueAtTime(0, now + 0.2);
+        osc.start(now); osc.stop(now + 0.2);
+    } 
+    else if (type === 'coin') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, now);
+        osc.frequency.setValueAtTime(1600, now + 0.1);
+        gainNode.gain.setValueAtTime(0.05, now);
+        gainNode.gain.linearRampToValueAtTime(0, now + 0.2);
+        osc.start(now); osc.stop(now + 0.2);
+    } 
+    else if (type === 'crash') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(10, now + 1);
+        gainNode.gain.setValueAtTime(0.2, now);
+        gainNode.gain.linearRampToValueAtTime(0, now + 1);
+        osc.start(now); osc.stop(now + 1);
+    }
+}
+// --------------------
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const ui = document.getElementById('ui');
@@ -156,6 +224,7 @@ const msgElement = document.getElementById('msg');
 const effectElement = document.getElementById('activeEffect');
 const bossHealthCont = document.getElementById('bossHealthContainer');
 const bossHealthBar = document.getElementById('bossHealthBar');
+const notificationEl = document.getElementById('notification');
 
 // Game State
 let score = 0, coins = parseInt(localStorage.getItem('sd_coins')) || 0;
@@ -163,7 +232,7 @@ let gameActive = false, isPaused = false, frame = 0, gameMode = 'endless';
 let highScore = localStorage.getItem('spaceDodgerHighScore') || 0;
 
 // Upgrades
-const defaultUpgrades = { shield: 1, slowmo: 1, shrink: 1, laser: 1, wingmen: 1, bomb: 1 };
+const defaultUpgrades = { shield: 1, slowmo: 1, shrink: 1, laser: 1, wingmen: 1, bomb: 1, asteroidLoot: 1, bossLoot: 1 };
 let upgrades = JSON.parse(localStorage.getItem('sd_upgrades')) || defaultUpgrades;
 
 // Skins Logic
@@ -213,20 +282,36 @@ let touchX = null;
 window.addEventListener('touchstart', (e) => { if(!isPaused && gameActive) touchX = e.touches[0].clientX; });
 window.addEventListener('touchmove', (e) => { if(!isPaused && gameActive) { touchX = e.touches[0].clientX; e.preventDefault(); } }, { passive: false });
 
-function showModeMenu() { mainMenu.style.display = 'none'; modeMenu.style.display = 'flex'; }
+// Helper for notifications
+function showNotification(text) {
+    notificationEl.innerText = text;
+    notificationEl.style.display = 'block';
+    // Simple fade out
+    setTimeout(() => { notificationEl.style.display = 'none'; }, 2000);
+}
+
+function showModeMenu() { 
+    playSound('ui'); 
+    mainMenu.style.display = 'none'; 
+    modeMenu.style.display = 'flex'; 
+}
+
 function showShop() {
+    playSound('ui'); 
     mainMenu.style.display = 'none';
     pauseMenu.style.display = 'none';
     shopMenu.style.display = 'flex';
     updateShopUI();
 }
 function closeShop() {
+    playSound('ui'); 
     shopMenu.style.display = 'none';
     if (gameActive) pauseMenu.style.display = 'flex';
     else mainMenu.style.display = 'flex';
 }
 
 function switchShopTab(tab) {
+    playSound('ui'); 
     currentShopTab = tab;
     // Update Button Styles
     document.getElementById('btnUpgrades').style.background = tab === 'upgrades' ? '#00ebff' : '#555';
@@ -248,17 +333,21 @@ function updateShopUI() {
             { key: 'shrink', name: 'Shrink Potion', desc: 'Effect & Duration' },
             { key: 'laser', name: 'Laser Beam', desc: 'Duration' },
             { key: 'wingmen', name: 'Wingmen Support', desc: 'Duration' },
-            { key: 'bomb', name: 'TNT Explosive', desc: 'Blast Radius' }
+            { key: 'bomb', name: 'TNT Explosive', desc: 'Blast Radius' },
+            { key: 'asteroidLoot', name: 'Asteroid Miner', desc: 'Coins per Kill' },
+            { key: 'bossLoot', name: 'Boss Bounty', desc: 'Bonus Coins' }
         ];
 
         items.forEach(item => {
             let lvl = upgrades[item.key] || 1;
             let cost = lvl * 100;
             let isMax = lvl >= 5;
-            
+
             let infoText = "";
             if (item.key === 'shield') infoText = `Capacity: ${lvl}`;
             else if (item.key === 'bomb') infoText = `Radius: ${(200 + lvl*50)}px`;
+            else if (item.key === 'asteroidLoot') infoText = `Coins: ${lvl}`;
+            else if (item.key === 'bossLoot') infoText = `Bonus: ${(25 + (lvl-1)*12.5)} coins`;
             else if (item.key === 'shrink') {
                  let sizeScale = 0.6 - ((lvl-1) * 0.05);
                  let dur = (400 + (lvl-1)*225)/60;
@@ -282,7 +371,7 @@ function updateShopUI() {
         availableSkins.forEach(skin => {
             let isOwned = ownedSkins.includes(skin.id);
             let isEquipped = equippedSkin === skin.id;
-            
+
             let btnHTML = "";
             if (isEquipped) {
                 btnHTML = `<button style="background:#7bed9f; cursor:default;" disabled>EQUIPPED</button>`;
@@ -309,24 +398,27 @@ function buyUpgrade(type) {
     if (lvl >= 5) return;
     let cost = lvl * 100;
     if (coins >= cost) {
+        playSound('coin'); 
         coins -= cost;
         upgrades[type] = lvl + 1;
         saveData();
         updateShopUI();
-    } else alert("Not enough coins!");
+    } else showNotification("NOT ENOUGH COINS!"); // CHANGED TO PHYSICAL POPUP
 }
 
 function buySkin(skinId) {
     let skin = availableSkins.find(s => s.id === skinId);
     if (coins >= skin.cost) {
+        playSound('coin'); 
         coins -= skin.cost;
         ownedSkins.push(skinId);
         saveData();
         updateShopUI();
-    } else alert("Not enough coins!");
+    } else showNotification("NOT ENOUGH COINS!"); // CHANGED TO PHYSICAL POPUP
 }
 
 function equipSkin(skinId) {
+    playSound('ui'); 
     equippedSkin = skinId;
     saveData();
     updateShopUI();
@@ -341,6 +433,7 @@ function saveData() {
 }
 
 function startGame(mode) {
+    playSound('ui'); 
     gameMode = mode;
     modeMenu.style.display = 'none';
     ui.style.display = 'block';
@@ -349,6 +442,7 @@ function startGame(mode) {
 }
 
 function showMainMenu() {
+    playSound('ui'); 
     gameActive = false; isPaused = false;
     mainMenu.style.display = 'flex'; modeMenu.style.display = 'none';
     pauseMenu.style.display = 'none'; msgElement.style.display = 'none';
@@ -357,6 +451,7 @@ function showMainMenu() {
 
 function togglePause() {
     if (!gameActive) return;
+    playSound('ui'); 
     isPaused = !isPaused;
     pauseMenu.style.display = isPaused ? 'flex' : 'none';
     if (!isPaused) draw();
@@ -372,11 +467,11 @@ function confirmReset() {
 function spawnBoss(type) {
     // Clear asteroids when boss spawns
     obstacles = [];
-    
+
     let hp = type === 1 ? 50 : (type === 2 ? 100 : 250);
     let w = type === 1 ? 100 : (type === 2 ? 140 : 220);
     let h = type === 1 ? 80 : (type === 2 ? 100 : 160);
-    
+
     activeBoss = { type, x: canvas.width/2-w/2, y: -h, w, h, hp, maxHp: hp, dir: 1, speed: type===1?3:2 };
     bossHealthCont.style.display = 'block';
     updateBossUI();
@@ -399,11 +494,13 @@ function createFireParticle(x, y, size, isExplosion = false) {
 }
 
 function triggerBomb(x, y, maxR = 250) {
+    playSound('explosion'); 
     explosions.push({ x: x, y: y, r: 0, maxR: maxR, alpha: 1.0 });
     for(let i=0; i<40; i++) createFireParticle(x, y, 50, true);
 }
 
 function addCoins(amt) {
+    if(amt > 10) playSound('coin'); // Added Sound only for big drops
     coins += amt;
     saveData();
 }
@@ -464,29 +561,32 @@ function update() {
         if (activeBoss.y < 80) activeBoss.y += 2;
         activeBoss.x += activeBoss.speed * activeBoss.dir;
         if (activeBoss.x <= 0 || activeBoss.x + activeBoss.w >= canvas.width) activeBoss.dir *= -1;
-        
+
         // Boss Collision with Player
         if (player.x < activeBoss.x + activeBoss.w && player.x + player.w > activeBoss.x && player.y < activeBoss.y + activeBoss.h && player.y + player.h > activeBoss.y) {
-            if (shieldCount > 0) { shieldCount--; activeBoss.hp -= 10; updateBossUI(); } else gameOver();
+            if (shieldCount > 0) { shieldCount--; activeBoss.hp -= 10; updateBossUI(); playSound('explosion'); } else gameOver();
         }
-        
+
         let pC = player.x + player.w/2;
         if (laserTimer > 0 && pC > activeBoss.x && pC < activeBoss.x + activeBoss.w) { activeBoss.hp -= 0.5; updateBossUI(); }
         if (wingmenTimer > 0 && ((pC-40 > activeBoss.x && pC-40 < activeBoss.x + activeBoss.w) || (pC+40 > activeBoss.x && pC+40 < activeBoss.x+activeBoss.w))) { activeBoss.hp -= 0.5; updateBossUI(); }
-        
+
         if (activeBoss.hp <= 0) { 
             triggerBomb(activeBoss.x+activeBoss.w/2, activeBoss.y+activeBoss.h/2); 
-            addCoins(100); 
             
+            // Boss Coin Logic: Base 100 + Bonus (25 to 75)
+            let bossBonus = 25 + ((upgrades['bossLoot']||1) - 1) * 12.5;
+            addCoins(100 + bossBonus); 
+
             // Mark bosses as defeated to prevent respawn
             if (activeBoss.type === 1) boss1Defeated = true;
             if (activeBoss.type === 2) boss2Defeated = true;
-            
-            // End game on Boss 3 (1000 pts)
+
+          // End game on Boss 3 (1000 pts)
             if (activeBoss.type === 3) {
                 gameWin();
             }
-            
+
             activeBoss = null; 
             bossHealthCont.style.display = 'none'; 
         }
@@ -497,11 +597,18 @@ function update() {
         if (frame % 2 === 0) createFireParticle(o.x + o.size/2, o.y + o.size/4, o.size);
         let destroyed = false;
         let pC = player.x + player.w/2;
-        if (laserTimer > 0 && o.x < pC+5 && o.x+o.size > pC-5 && o.y < player.y) { destroyed = true; addCoins(1); }
-        if (wingmenTimer > 0 && ((o.x < pC-35 && o.x+o.size > pC-45) || (o.x < pC+45 && o.x+o.size > pC+35)) && o.y < player.y) { destroyed = true; addCoins(1); }
-        explosions.forEach(ex => { if (Math.sqrt(Math.pow(o.x+o.size/2-ex.x,2)+Math.pow(o.y+o.size/2-ex.y,2)) < ex.r+o.size/2) { destroyed = true; addCoins(1); } });
+        // Apply Asteroid Coin Multiplier (Level 1 = 1 coin, Level 5 = 5 coins)
+        let coinReward = upgrades['asteroidLoot'] || 1;
 
-        if (destroyed) { obstacles.splice(i, 1); score++; currentScoreElement.innerText = `Score: ${score}`; continue; }
+        if (laserTimer > 0 && o.x < pC+5 && o.x+o.size > pC-5 && o.y < player.y) { destroyed = true; addCoins(coinReward); }
+        if (wingmenTimer > 0 && ((o.x < pC-35 && o.x+o.size > pC-45) || (o.x < pC+45 && o.x+o.size > pC+35)) && o.y < player.y) { destroyed = true; addCoins(coinReward); }
+        explosions.forEach(ex => { if (Math.sqrt(Math.pow(o.x+o.size/2-ex.x,2)+Math.pow(o.y+o.size/2-ex.y,2)) < ex.r+o.size/2) { destroyed = true; addCoins(coinReward); } });
+
+        if (destroyed) { 
+            obstacles.splice(i, 1); score++; currentScoreElement.innerText = `Score: ${score}`; 
+            playSound('explosion'); 
+            continue; 
+        }
         if (Math.sqrt(Math.pow(player.x+player.w/2-(o.x+o.size/2),2)+Math.pow(player.y+player.h/2-(o.y+o.size/2),2)) < (o.size/2+player.w/3)) {
             if (shieldCount > 0) { 
                 shieldCount--; 
@@ -515,7 +622,8 @@ function update() {
     for (let i = powerups.length - 1; i >= 0; i--) {
         let p = powerups[i]; p.y += 3;
         if (player.x < p.x + p.size && player.x + player.w > p.x && player.y < p.y + p.size && player.y + player.h > p.y) {
-            
+            playSound('powerup'); 
+
             let lvl = upgrades[p.type] || 1; 
             let duration = 300 + (lvl - 1) * 225; 
 
@@ -530,7 +638,7 @@ function update() {
                 let r = 200 + (lvl * 50);
                 triggerBomb(player.x + player.w/2, player.y + player.h/2, r);
             }
-            
+
             powerups.splice(i, 1);
         } else if (p.y > canvas.height) powerups.splice(i, 1);
     }
@@ -554,7 +662,7 @@ function drawShip(x, y, w, h, color) {
     let shipColor = skin ? skin.color : color;
 
     ctx.save(); ctx.translate(x+w/2, y+h/2); 
-    
+
     // Custom Skin Shapes
     if (equippedSkin === 'crimson') {
         // Sharp aggressive wings
@@ -573,13 +681,13 @@ function drawShip(x, y, w, h, color) {
         ctx.fillStyle = shipColor; ctx.beginPath(); ctx.moveTo(0,-h/2); ctx.lineTo(w/2,h/4); ctx.lineTo(w/4,h/2); ctx.lineTo(-w/4,h/2); ctx.lineTo(-w/2,h/4); ctx.closePath(); ctx.fill();
         ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(0,-h/8,w/6,h/4,0,0,Math.PI*2); ctx.fill(); ctx.strokeStyle = "white"; ctx.stroke();
     }
-    
+
     ctx.restore();
 }
 
 function drawBossShip(b) {
     ctx.save(); ctx.translate(b.x + b.w/2, b.y + b.h/2);
-    
+
     if (b.type === 1) { // 250pts - The Scout
         ctx.fillStyle = "#ff4757"; 
         ctx.beginPath(); ctx.moveTo(0, b.h/2); ctx.lineTo(b.w/2, -b.h/2); ctx.lineTo(-b.w/2, -b.h/2); ctx.closePath(); ctx.fill();
@@ -603,7 +711,7 @@ function drawBossShip(b) {
         // Core
         ctx.fillStyle = "#ff0000"; ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI*2); ctx.fill();
     }
-    
+
     ctx.restore();
 }
 
@@ -664,27 +772,28 @@ function draw() {
     particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size*p.life, 0, Math.PI*2); ctx.fill(); });
     ctx.globalAlpha = 1.0;
     explosions.forEach(ex => { ctx.save(); ctx.globalAlpha = ex.alpha; let grad = ctx.createRadialGradient(ex.x, ex.y, ex.r*0.2, ex.x, ex.y, ex.r); grad.addColorStop(0, 'rgba(255, 255, 255, 0.8)'); grad.addColorStop(0.3, 'rgba(255, 200, 0, 0.5)'); grad.addColorStop(1, 'rgba(255, 0, 0, 0)'); ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.r, 0, Math.PI*2); ctx.fill(); ctx.restore(); });
-    
+
     powerups.forEach(p => { drawPowerup(p); });
 
     if (laserTimer > 0) drawLaser(player.x+player.w/2, player.y);
     if (wingmenTimer > 0) { drawShip(player.x-50, player.y+10, 20, 30, "#7bed9f"); drawShip(player.x+player.w+30, player.y+10, 20, 30, "#7bed9f"); drawLaser(player.x-40, player.y); drawLaser(player.x+player.w+40, player.y); }
-    
+
     if (activeBoss) drawBossShip(activeBoss);
-    
+
     drawShip(player.x, player.y, player.w, player.h, "#4ec3e0");
-    
+
     if (shieldCount > 0) { 
         ctx.strokeStyle = '#00d2ff'; ctx.lineWidth = 2 + (shieldCount); 
         ctx.beginPath(); ctx.arc(player.x+player.w/2, player.y+player.h/2, player.w*0.9, 0, Math.PI*2); ctx.stroke(); 
         if (shieldCount > 1) { ctx.beginPath(); ctx.arc(player.x+player.w/2, player.y+player.h/2, player.w*1.1, 0, Math.PI*2); ctx.stroke(); }
     }
-    
+
     obstacles.forEach(o => drawAsteroid(o));
     requestAnimationFrame(() => { update(); draw(); });
 }
 
 function gameOver() {
+    playSound('crash'); 
     gameActive = false; bossHealthCont.style.display = 'none';
     if (score > highScore) { highScore = score; localStorage.setItem('spaceDodgerHighScore', highScore); highScoreUI.innerText = `Best: ${highScore}`; }
     document.getElementById('msgTitle').innerText = "CRASHED";
@@ -694,6 +803,7 @@ function gameOver() {
 }
 
 function gameWin() {
+    playSound('coin'); 
     gameActive = false; bossHealthCont.style.display = 'none';
     document.getElementById('msgTitle').innerText = "VICTORY!";
     document.getElementById('finalScore').innerText = `You defeated the Alien Fleet!`;
